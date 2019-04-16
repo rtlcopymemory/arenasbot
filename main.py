@@ -1,6 +1,9 @@
 #!python
 import discord
 import secret
+import sqlite3
+
+conn = sqlite3.connect('example.db')
 
 prefix = 'w.'
 
