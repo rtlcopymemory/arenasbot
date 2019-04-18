@@ -5,6 +5,8 @@ import sqlite3
 
 conn = sqlite3.connect('example.db')
 
+conn.execute("CREATE TABLE IF NOT EXISTS arenas (id INTEGER PRIMARY KEY AUTOINCREMENT, author TEXT, time DATETIME DEFAULT CURRENT_TIMESTAMP)")
+
 prefix = 'w.'
 
 class MyClient(discord.Client):
