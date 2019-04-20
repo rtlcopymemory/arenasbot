@@ -1,2 +1,4 @@
 secret.py
 testDatabase.py
+test.db
+*.db
