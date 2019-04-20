@@ -14,6 +14,7 @@ conn.commit()
 conn.close()
 
 prefix = 'w.'
+arenaChatsCatName = 'arena chats'
 
 # Function called every 20 seconds to check if any arena has to be deleted. It gets first called on Discord's on_ready function
 def checkDatabaseForDelete():
@@ -29,27 +30,44 @@ def checkDatabaseForDelete():
   threading.Timer(20.0, checkDatabaseForDelete).start()
 
 class MyClient(discord.Client):
+  ####################################### on_ready #################################################
   async def on_ready(self):
     print('Logged on as {0}!'.format(self.user))
     checkDatabaseForDelete()
 
+  ###################################### on_message ################################################
   async def on_message(self, message):
     if (message.content.lower().startswith(prefix + 'startarena')):
-      print("Lo sbatti che ho")
+      authorName = message.author.name
       # SQL STUFF
-      # TODO: check if user already has a channel
       conn = sqlite3.connect('example.db') # open database
       curr = conn.cursor() # create cursor
-      curr.execute('''
-        INSERT INTO arenas (author, time)
-        VALUES (?, ?)
-      ''', (str(message.author), int(dt.datetime.now().strftime('%Y%m%d%H%M%S')))) # Insert into table with automatic ID, author nick and timestamp as '20190420130059'
+      curr.execute("SELECT * FROM arenas WHERE author = ?", (str(authorName),)) # Check if user already has an arena
+      if curr.fetchone() == None:
+        curr.execute('''
+          INSERT INTO arenas (author, time)
+          VALUES (?, ?)
+        ''', (str(message.author), int(dt.datetime.now().strftime('%Y%m%d%H%M%S')))) # Insert into table with automatic ID, author nick and timestamp as '20190420130059'
+        print("Ok, inserted {} into database".format(authorName))
+        # Get the 'arena chats' category
+        for entry in message.guild.categories:
+          if entry.name == arenaChatsCatName:
+            # create channel
+            channelName = str(authorName) + '_arena'
+            createdChannel = await entry.create_text_channel(channelName) # Creates the channel in the specified category
+      else:
+        await message.channel.send("You already have an arena\nArena channels run out after 1 hour")
       curr.close()
       conn.commit() # ALWAYS remember to commit before closing the connection
       conn.close()
       # END SQL STUFF
-      print("Ok, inserted {} into database".format(message.author))
-      # TODO: Create channel
+  
+  ####################################### on_error #################################################
+  async def on_error(event, *args, **kwargs):
+    message = args[0]
+    print("on_error: ", args)
+    print("kwargs: ", kwargs)
+    await args[1].channel.send("Insufficent Permissions")
 
 client = MyClient()
 client.run(secret.token)
