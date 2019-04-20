@@ -15,12 +15,14 @@ conn.close()
 
 prefix = 'w.'
 
+# Function called every 20 seconds to check if any arena has to be deleted. It gets first called on Discord's on_ready function
 def checkDatabaseForDelete():
   conn2 = sqlite3.connect('example.db')
-  timeUp = dt.datetime.now() - dt.timedelta(hours=0, minutes=1)
+  timeUp = dt.datetime.now() - dt.timedelta(hours=1, minutes=0) # timeout arenas
   curr = conn2.cursor()
   curr.execute("SELECT * FROM arenas WHERE time < ?", (timeUp.strftime('%Y%m%d%H%M%S'), ))
-  results = curr.fetchall()
+  results = curr.fetchall() # returns an array of tuples with the arenas to delete
+  # TODO: Delete the arenas channels and their database entry
   curr.close()
   conn2.close()
   print(results)
@@ -35,6 +37,7 @@ class MyClient(discord.Client):
     if (message.content.lower().startswith(prefix + 'startarena')):
       print("Lo sbatti che ho")
       # SQL STUFF
+      # TODO: check if user already has a channel
       conn = sqlite3.connect('example.db') # open database
       curr = conn.cursor() # create cursor
       curr.execute('''
@@ -46,6 +49,7 @@ class MyClient(discord.Client):
       conn.close()
       # END SQL STUFF
       print("Ok, inserted {} into database".format(message.author))
+      # TODO: Create channel
 
 client = MyClient()
 client.run(secret.token)
