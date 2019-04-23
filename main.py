@@ -2,7 +2,6 @@
 import discord
 import secret
 import sqlite3
-import threading
 import datetime as dt
 import asyncio
 
