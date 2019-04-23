@@ -4,6 +4,7 @@ import secret
 import sqlite3
 import threading
 import datetime as dt
+import asyncio
 
 conn = sqlite3.connect('example.db')
 
@@ -17,39 +18,31 @@ prefix = 'w.'
 serverName = "Sargasso - Wolf SSBU"
 arenaChatsCatName = 'arena chats'
 
-# Function called every 20 seconds to check if any arena has to be deleted. It gets first called on Discord's on_ready function
-# def checkDatabaseForDelete():
-#   conn2 = sqlite3.connect('example.db')
-#   timeUp = dt.datetime.now() - dt.timedelta(hours=1, minutes=0) # timeout arenas
-#   curr = conn2.cursor()
-#   curr.execute("SELECT * FROM arenas WHERE time < ?", (timeUp.strftime('%Y%m%d%H%M%S'), ))
-#   results = curr.fetchall() # returns an array of tuples with the arenas to delete
-#   # TODO: Delete the arenas channels and their database entry
-#   curr.close()
-#   conn2.close()
-#   print(results)
-#   threading.Timer(20.0, checkDatabaseForDelete).start()
-
 class MyClient(discord.Client):
   # Method called every 20 seconds to check if any arena has to be deleted. It gets first called on Discord's on_ready function
   async def checkDatabaseForDelete(self):
-    conn2 = sqlite3.connect('example.db')
-    timeUp = dt.datetime.now() - dt.timedelta(hours=0, minutes=1) # timeout arenas
-    curr = conn2.cursor()
-    curr.execute("SELECT * FROM arenas WHERE time < ?", (timeUp.strftime('%Y%m%d%H%M%S'), ))
-    results = curr.fetchall() # returns an array of tuples with the arenas to delete
-    curr.close()
-    conn2.close()
-    print(results)
-    threading.Timer(20.0, self.checkDatabaseForDelete).start() # TODO: Solve function to await in Timer
-    if results != []: # Do it only if its needed
-      for entry in self.guilds:
-        if serverName in entry.name:
-          # Found server to delete the channel from: entry.categories
-          for channel in entry.channels:
-            for toDelete in results:
-              if toDelete[1].lower().replace(' ', '-') in channel.name:
-                await channel.delete()
+    while True:
+      conn2 = sqlite3.connect('example.db')
+      timeUp = dt.datetime.now() - dt.timedelta(hours=1, minutes=0) # timeout arenas
+      curr = conn2.cursor()
+      curr.execute("SELECT * FROM arenas WHERE time < ?", (timeUp.strftime('%Y%m%d%H%M%S'), ))
+      results = curr.fetchall() # returns an array of tuples with the arenas to delete
+      print(results)
+      if results != []: # Do it only if its needed
+        for entry in self.guilds:
+          if serverName in entry.name:
+            # Found server to delete the channel from: entry.categories
+            for channel in entry.channels:
+              for toDelete in results:
+                if toDelete[1].lower().replace(' ', '-') in channel.name:
+                  await channel.delete()
+                  curr2 = conn2.cursor()
+                  curr2.execute("DELETE FROM arenas WHERE author = ?", (toDelete[1].lower(), ) )
+                  curr2.close()
+      curr.close()
+      conn2.commit()
+      conn2.close()
+      await asyncio.sleep(20)
 
   ####################################### on_ready #################################################
   async def on_ready(self):
@@ -59,7 +52,7 @@ class MyClient(discord.Client):
   ###################################### on_message ################################################
   async def on_message(self, message):
     if (message.content.lower().startswith(prefix + 'startarena')):
-      authorName = message.author.name
+      authorName = message.author.name.lower()
       # SQL STUFF
       conn = sqlite3.connect('example.db') # open database
       curr = conn.cursor() # create cursor
@@ -88,7 +81,8 @@ class MyClient(discord.Client):
     message = args[0]
     print("on_error: ", args)
     print("kwargs: ", kwargs)
-    await args[1].channel.send("Insufficent Permissions")
+    if len(args) > 0:
+      await args[1].channel.send("Insufficent Permissions")
 
 client = MyClient()
 client.run(secret.token)
