@@ -52,7 +52,7 @@ class MyClient(discord.Client):
 
   ###################################### on_message ################################################
   async def on_message(self, message):
-    if message.author.bot:
+    if message.author.bot: # Ignore the message if its a bot who sent it
       return
     # OnMessage
     messArgv = message.content.split(' ')
@@ -80,11 +80,13 @@ class MyClient(discord.Client):
       # Delete arena
       print("lul")
     elif message.content.lower().startswith(prefix + 'setcategory'): # setcategory command
+      if not author.permissions_in(message.channel).administrator:
+        await message.channel.send("Only admins can set this... sorry")
       if re.fullmatch(r"^\d{18}$", messArgv[1]):
         # check if the category exists
         found = False
         for cat in message.guild.categories:
-          if cat.id == messArgv[1]:
+          if cat.id == int(messArgv[1]):
             found = True
         if not found:
           await message.channel.send("Category not found, are you sure it was a category ID?")
@@ -96,6 +98,7 @@ class MyClient(discord.Client):
         cur.close()
         conn.commit()
         conn.close()
+        await message.channel.send("Ight, category set")
       else:
         await message.channel.send("Invalid ID, please give the bot a category ID")
     elif message.content.lower().startswith(prefix + 'help'):
