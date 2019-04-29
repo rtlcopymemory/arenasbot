@@ -65,7 +65,7 @@ class MyClient(discord.Client):
       cur.execute("SELECT * FROM arenas WHERE authorID = ?", (authorID,))
       check = cur.fetchone()
       if check != None:
-        message.channel.send("You already have an arena open")
+        await message.channel.send("You already have an arena open")
       else:
         # create it
         cur.execute("SELECT categoryID FROM servers WHERE serverID = ?", (message.guild.id,))
@@ -86,7 +86,6 @@ class MyClient(discord.Client):
             await message.channel.send("Something went wrong, request took longer than a minute")
             return
           continue
-        print("{} {} {} {}".format(channelID, author.name, authorID, dt.datetime.now().strftime('%Y%m%d%H%M%S')))
         cur.execute("""
           INSERT INTO arenas (channelID, author, authorID, time)
           VALUES (?, ?, ?, ?)
@@ -97,7 +96,27 @@ class MyClient(discord.Client):
       conn.close()
     elif message.content.lower().startswith(prefix + 'closearena'): # closearena command
       # Delete arena
-      print("lul")
+      conn = sqlite3.connect('example.db')
+      cur = conn.cursor()
+      cur.execute("SELECT channelID FROM arenas WHERE authorID = ?", (authorID, ))
+      res = cur.fetchone()
+      if res == None:
+        await message.channel.send("Fam, you first gotta open an arena to close it...")
+        return
+      cur.execute("DELETE FROM arenas WHERE authorID = ?", (authorID, ))
+      cur.fetchone()
+      cur.execute("SELECT categoryID FROM servers WHERE serverID = ?", (message.guild.id, ))
+      categoryID = (cur.fetchone())[0]
+      channelID = res[0]
+      for channel in message.guild.channels:
+        if channel.id == channelID:
+          await channel.delete()
+          break
+      if message.channel.id != channelID:
+        await message.channel.send("Ok, arena channel deleted")
+      cur.close()
+      conn.commit()
+      conn.close()
     elif message.content.lower().startswith(prefix + 'setcategory'): # setcategory command
       if not author.permissions_in(message.channel).administrator:
         await message.channel.send("Only admins can set this... sorry")
