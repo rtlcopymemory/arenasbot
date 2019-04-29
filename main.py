@@ -53,6 +53,8 @@ class MyClient(discord.Client):
     # OnMessage
     if message.lower().startswith(prefix + 'startarena'):
       # Create arena
+      author = message.author
+      # authorID = message.author.ID
     elif message.lower().startswith(prefix + 'closearena'):
       # Delete arena
     elif message.lower().startswith(prefix + 'help'):
