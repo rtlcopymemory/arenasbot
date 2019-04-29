@@ -4,11 +4,13 @@ import secret
 import sqlite3
 import datetime as dt
 import asyncio
+import re
 
 conn = sqlite3.connect('example.db')
 
 cursor = conn.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS arenas (id INTEGER PRIMARY KEY AUTOINCREMENT, channelID INTEGER, author TEXT, authorID INTEGER, time INTEGER)")
+cursor.execute("CREATE TABLE IF NOT EXISTS servers (id INTEGER PRIMARY KEY AUTOINCREMENT, serverID INTEGER, categoryID INTEGER)")
 cursor.close()
 conn.commit()
 conn.close()
@@ -50,20 +52,59 @@ class MyClient(discord.Client):
 
   ###################################### on_message ################################################
   async def on_message(self, message):
+    if message.author.bot:
+      return
     # OnMessage
-    if message.lower().startswith(prefix + 'startarena'):
+    messArgv = message.content.split(' ')
+    author = message.author
+    authorID = message.author.id
+    if message.content.lower().startswith(prefix + 'startarena'):
       # Create arena
-      author = message.author
-      authorID = message.author.id
-      
-    elif message.lower().startswith(prefix + 'closearena'):
+      conn = sqlite3.connect('example.db')
+      cur = conn.cursor()
+      cur.execute("SELECT * FROM arenas WHERE authorID = ?", (authorID,))
+      check = cur.fetchone()
+      if check != None:
+        message.channel.send("You already have an arena open")
+      else:
+        # create it
+        await message.guild
+        cur.execute("""
+          INSERT INTO arenas (channelID, author, authorID, time)
+          VALUES (?, ?, ?, ?)
+        """, ())
+      cur.close()
+      conn.commit()
+      conn.close()
+    elif message.content.lower().startswith(prefix + 'closearena'): # closearena command
       # Delete arena
-    elif message.lower().startswith(prefix + 'help'):
+      print("lul")
+    elif message.content.lower().startswith(prefix + 'setcategory'): # setcategory command
+      if re.fullmatch(r"^\d{18}$", messArgv[1]):
+        # check if the category exists
+        found = False
+        for cat in message.guild.categories:
+          if cat.id == messArgv[1]:
+            found = True
+        if not found:
+          await message.channel.send("Category not found, are you sure it was a category ID?")
+          return
+        # Set arenas category
+        conn = sqlite3.connect('example.db')
+        cur = conn.cursor()
+        cur.execute("INSERT INTO servers (serverID, categoryID) VALUES (?, ?)", (message.guild.id, messArgv[1]))
+        cur.close()
+        conn.commit()
+        conn.close()
+      else:
+        await message.channel.send("Invalid ID, please give the bot a category ID")
+    elif message.content.lower().startswith(prefix + 'help'):
       # Help message
-  
+      print("lul")
   ####################################### on_error #################################################
-  async def on_error(event, *args, **kwargs):
+  async def on_error(self, event, *args, **kwargs):
     # OnError
+    print("lul Error: ", event)
 
 client = MyClient()
 client.run(secret.token)
