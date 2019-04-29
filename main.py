@@ -101,9 +101,17 @@ class MyClient(discord.Client):
         await message.channel.send("Ight, category set")
       else:
         await message.channel.send("Invalid ID, please give the bot a category ID")
-    elif message.content.lower().startswith(prefix + 'help'):
-      # Help message
-      print("lul")
+    elif message.content.lower().startswith(prefix + 'help'): # help command
+      # embed
+      embed = discord.Embed()
+      embed.color = discord.Color.from_rgb(149, 66, 244)
+      embed.set_author(name = "Bot by: Sesilaso", url = "https://github.com/StackWolfed/arenasbot")
+      embed.title = "Help"
+      embed.add_field(name=(prefix + "startarena"), value="Creates an arena")
+      embed.add_field(name=(prefix + "closearena"), value="Closes an arena")
+      embed.add_field(name=(prefix + "setcategory"), value="[ADMINS ONLY] Sets the target category to create arena channels")
+      embed.add_field(name=(prefix + "help"), value="This")
+      await message.channel.send(embed=embed)
   ####################################### on_error #################################################
   async def on_error(self, event, *args, **kwargs):
     # OnError
