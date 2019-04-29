@@ -68,11 +68,30 @@ class MyClient(discord.Client):
         message.channel.send("You already have an arena open")
       else:
         # create it
-        await message.guild
+        cur.execute("SELECT categoryID FROM servers WHERE serverID = ?", (message.guild.id,))
+        categoryID = cur.fetchone()
+        if categoryID == None:
+          await message.channel.send("Sorry fam, gotta ask an admin to set up the category first")
+          return
+        categoryID = categoryID[0]
+        channelID = None
+        for cat in message.guild.categories:
+          if cat.id == categoryID:
+            channelID = await cat.create_text_channel(author.name + "_arena")
+            channelID = channelID.id
+            break
+        timeoutstart = dt.datetime.now()
+        while channelID == None:
+          if (dt.datetime.now() - timeoutstart) < dt.datetime(second=30):
+            await message.channel.send("Something went wrong, request took longer than a minute")
+            return
+          continue
+        print("{} {} {} {}".format(channelID, author.name, authorID, dt.datetime.now().strftime('%Y%m%d%H%M%S')))
         cur.execute("""
           INSERT INTO arenas (channelID, author, authorID, time)
           VALUES (?, ?, ?, ?)
-        """, ())
+        """, (channelID, author.name, authorID, dt.datetime.now().strftime('%Y%m%d%H%M%S')))
+        await message.channel.send("Ight bro, here's your arena channel. You have 1 hour before it expires\n<#{}>".format(channelID))
       cur.close()
       conn.commit()
       conn.close()
@@ -116,6 +135,8 @@ class MyClient(discord.Client):
   async def on_error(self, event, *args, **kwargs):
     # OnError
     print("lul Error: ", event)
+    print("lul stuff: ", args)
+    print("lul even more stuff: ", kwargs)
 
 client = MyClient()
 client.run(secret.token)
