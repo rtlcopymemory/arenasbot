@@ -158,7 +158,7 @@ class MyClient(discord.Client):
       embed.title = "Help"
       embed.add_field(name=(prefix + "startarena <ARENA_ID> <ARENA_PSW>"), value="Creates an arena")
       embed.add_field(name=(prefix + "closearena"), value="Closes an arena")
-      embed.add_field(name=(prefix + "setcategory <cATEGORY_ID>"), value="[ADMINS ONLY] Sets the target category to create arena channels")
+      embed.add_field(name=(prefix + "setcategory <CATEGORY_ID>"), value="[ADMINS ONLY] Sets the target category to create arena channels")
       embed.add_field(name=(prefix + "help"), value="This")
       await message.channel.send(embed=embed)
   ####################################### on_error #################################################
