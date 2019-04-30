@@ -60,7 +60,7 @@ class MyClient(discord.Client):
       if len(messArgv) != 3:
         await message.channel.send("Please provide an arena ID and a Password (Not enough arguments)")
         return
-      if not re.fullmatch(r"^[0-9a-zA-Z]{5}$", messArgv[1]) or not re.fullmatch(r"^\d{4,10}$", messArgv[2]):
+      if not re.fullmatch(r"^[0-9a-zA-Z]{5}$", messArgv[1]) or not re.fullmatch(r"^\d{1,8}$", messArgv[2]):
         await message.channel.send("Please provide an arena ID and a Password")
         return
       conn = sqlite3.connect(databaseName)
