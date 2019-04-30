@@ -5,3 +5,6 @@ secret.py
 ```py
 token = 'YOUR_TOKEN_HERE'
 ```
+
+## Python version
+Uses **python 3.7** and the rewrite version of `discord.py`
