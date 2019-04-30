@@ -58,9 +58,11 @@ class MyClient(discord.Client):
     if message.content.lower().startswith(prefix + 'startarena'):
       # Create arena
       if len(messArgv) != 3:
-        if not (re.fullmatch(r"^[0-9a-zA-Z]{5}$", messArgv[1]) and re.fullmatch(r"^\d{4,10}$", messArgv[2])):
+        if not re.fullmatch(r"^[0-9a-zA-Z]{5}$", messArgv[1]) or not re.fullmatch(r"^\d{4,10}$", messArgv[2]):
           await message.channel.send("Please provide an arena ID and a Password")
           return
+        await message.channel.send("Please provide an arena ID and a Password (Not enough arguments)")
+        return
       conn = sqlite3.connect(databaseName)
       cur = conn.cursor()
       cur.execute("SELECT * FROM arenas WHERE authorID = ?", (authorID,))
