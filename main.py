@@ -5,50 +5,47 @@ import sqlite3
 import datetime as dt
 import asyncio
 import re
+import modules
 
-conn = sqlite3.connect('example.db')
+databaseName = 'database.db'
 
-cursor = conn.cursor()
-cursor.execute("CREATE TABLE IF NOT EXISTS arenas (id INTEGER PRIMARY KEY AUTOINCREMENT, channelID INTEGER, author TEXT, authorID INTEGER, time INTEGER)")
-cursor.execute("CREATE TABLE IF NOT EXISTS servers (id INTEGER PRIMARY KEY AUTOINCREMENT, serverID INTEGER, categoryID INTEGER)")
-cursor.close()
-conn.commit()
-conn.close()
+modules.initDB(sqlite3, databaseName)
 
 prefix = 'w.'
-serverName = "Sargasso - Wolf SSBU"
-arenaChatsCatName = 'arena chats'
 
 class MyClient(discord.Client):
   # Method called every 20 seconds to check if any arena has to be deleted. It gets first called on Discord's on_ready function
-  # async def checkDatabaseForDelete(self):
-  #   while True:
-  #     conn2 = sqlite3.connect('example.db')
-  #     timeUp = dt.datetime.now() - dt.timedelta(hours=1, minutes=0) # timeout arenas
-  #     curr = conn2.cursor()
-  #     curr.execute("SELECT * FROM arenas WHERE time < ?", (timeUp.strftime('%Y%m%d%H%M%S'), ))
-  #     results = curr.fetchall() # returns an array of tuples with the arenas to delete
-  #     print(results)
-  #     if results != []: # Do it only if its needed
-  #       for entry in self.guilds:
-  #         if serverName in entry.name:
-  #           # Found server to delete the channel from: entry.categories
-  #           for channel in entry.channels:
-  #             for toDelete in results:
-  #               if toDelete[1].lower().replace(' ', '-') in channel.name:
-  #                 await channel.delete()
-  #                 curr2 = conn2.cursor()
-  #                 curr2.execute("DELETE FROM arenas WHERE author = ?", (toDelete[1].lower(), ) )
-  #                 curr2.close()
-  #     curr.close()
-  #     conn2.commit()
-  #     conn2.close()
-  #     await asyncio.sleep(20)
+  async def checkDatabaseForDelete(self):
+    while True:
+      conn2 = sqlite3.connect(databaseName)
+      timeUp = dt.datetime.now() - dt.timedelta(hours=0, minutes=1) # timeout arenas
+      curr = conn2.cursor()
+      curr.execute("SELECT channelID, categoryID FROM arenas WHERE time < ?", (timeUp.strftime('%Y%m%d%H%M%S'), ))
+      results = curr.fetchall() # returns an array of tuples with the arenas to delete
+      print(results)
+      if results != []: # Do it only if its needed
+        # Delete database entry and channel
+        for toDelete in results:
+          # toDelete = (channelID, CategoryID)
+          curr.execute("SELECT serverID FROM servers WHERE categoryID = ?", (toDelete[1], ))
+          serverID = curr.fetchone()[0]
+          for server in self.guilds:
+            if server.id == serverID:
+              for cat in server.categories:
+                if cat.id == toDelete[1]:
+                  for channel in cat.channels:
+                    if channel.id == toDelete[0]:
+                      await channel.delete()
+                      curr.execute("DELETE FROM arenas WHERE channelID = ?", (toDelete[0], ))
+      curr.close()
+      conn2.commit()
+      conn2.close()
+      await asyncio.sleep(10)
 
   ####################################### on_ready #################################################
   async def on_ready(self):
     print('Logged on as {0}!'.format(self.user))
-    # await self.checkDatabaseForDelete()
+    await self.checkDatabaseForDelete()
 
   ###################################### on_message ################################################
   async def on_message(self, message):
@@ -60,7 +57,11 @@ class MyClient(discord.Client):
     authorID = message.author.id
     if message.content.lower().startswith(prefix + 'startarena'):
       # Create arena
-      conn = sqlite3.connect('example.db')
+      if len(messArgv) != 3:
+        if not (re.fullmatch(r"^[0-9a-zA-Z]{5}$", messArgv[1]) and re.fullmatch(r"^\d{4,10}$", messArgv[2])):
+          await message.channel.send("Please provide an arena ID and a Password")
+          return
+      conn = sqlite3.connect(databaseName)
       cur = conn.cursor()
       cur.execute("SELECT * FROM arenas WHERE authorID = ?", (authorID,))
       check = cur.fetchone()
@@ -74,29 +75,37 @@ class MyClient(discord.Client):
           await message.channel.send("Sorry fam, gotta ask an admin to set up the category first")
           return
         categoryID = categoryID[0]
-        channelID = None
+        newChannel = None
         for cat in message.guild.categories:
           if cat.id == categoryID:
-            channelID = await cat.create_text_channel(author.name + "_arena")
-            channelID = channelID.id
+            newChannel = await cat.create_text_channel(author.name + "_arena")
             break
         timeoutstart = dt.datetime.now()
-        while channelID == None:
+        while newChannel == None:
           if (dt.datetime.now() - timeoutstart) < dt.datetime(second=30):
             await message.channel.send("Something went wrong, request took longer than a minute")
             return
           continue
+        channelID = newChannel.id
         cur.execute("""
-          INSERT INTO arenas (channelID, author, authorID, time)
-          VALUES (?, ?, ?, ?)
-        """, (channelID, author.name, authorID, dt.datetime.now().strftime('%Y%m%d%H%M%S')))
-        await message.channel.send("Ight bro, here's your arena channel. You have 1 hour before it expires\n<#{}>".format(channelID))
+          INSERT INTO arenas (channelID, categoryID, author, authorID, time)
+          VALUES (?, ?, ?, ?, ?)
+        """, (channelID, categoryID, author.name, authorID, dt.datetime.now().strftime('%Y%m%d%H%M%S')))
+        infoMessage = await newChannel.send("ID: {0}\nPass: {1}".format(messArgv[1], messArgv[2]))
+        timeoutstart = dt.datetime.now()
+        while infoMessage == None:
+          if (dt.datetime.now() - timeoutstart) < dt.datetime(second=30):
+            await message.channel.send("Something went wrong with the message pinning, request took longer than a minute")
+            return
+          continue
+        await infoMessage.pin()
+        await message.channel.send("Ight bro, here's your arena channel. You have 3 hour before it expires\n<#{}>".format(channelID))
       cur.close()
       conn.commit()
       conn.close()
     elif message.content.lower().startswith(prefix + 'closearena'): # closearena command
       # Delete arena
-      conn = sqlite3.connect('example.db')
+      conn = sqlite3.connect(databaseName)
       cur = conn.cursor()
       cur.execute("SELECT channelID FROM arenas WHERE authorID = ?", (authorID, ))
       res = cur.fetchone()
@@ -130,7 +139,7 @@ class MyClient(discord.Client):
           await message.channel.send("Category not found, are you sure it was a category ID?")
           return
         # Set arenas category
-        conn = sqlite3.connect('example.db')
+        conn = sqlite3.connect(databaseName)
         cur = conn.cursor()
         cur.execute("INSERT INTO servers (serverID, categoryID) VALUES (?, ?)", (message.guild.id, messArgv[1]))
         cur.close()
@@ -145,9 +154,9 @@ class MyClient(discord.Client):
       embed.color = discord.Color.from_rgb(149, 66, 244)
       embed.set_author(name = "Bot by: Sesilaso", url = "https://github.com/StackWolfed/arenasbot")
       embed.title = "Help"
-      embed.add_field(name=(prefix + "startarena"), value="Creates an arena")
+      embed.add_field(name=(prefix + "startarena <ARENA_ID> <ARENA_PSW>"), value="Creates an arena")
       embed.add_field(name=(prefix + "closearena"), value="Closes an arena")
-      embed.add_field(name=(prefix + "setcategory"), value="[ADMINS ONLY] Sets the target category to create arena channels")
+      embed.add_field(name=(prefix + "setcategory <cATEGORY_ID>"), value="[ADMINS ONLY] Sets the target category to create arena channels")
       embed.add_field(name=(prefix + "help"), value="This")
       await message.channel.send(embed=embed)
   ####################################### on_error #################################################
