@@ -18,7 +18,7 @@ class MyClient(discord.Client):
   async def checkDatabaseForDelete(self):
     while True:
       conn2 = sqlite3.connect(databaseName)
-      timeUp = dt.datetime.now() - dt.timedelta(hours=0, minutes=1) # timeout arenas
+      timeUp = dt.datetime.now() - dt.timedelta(hours=3, minutes=0) # timeout arenas
       curr = conn2.cursor()
       curr.execute("SELECT channelID, categoryID FROM arenas WHERE time < ?", (timeUp.strftime('%Y%m%d%H%M%S'), ))
       results = curr.fetchall() # returns an array of tuples with the arenas to delete
