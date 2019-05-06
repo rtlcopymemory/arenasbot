@@ -78,10 +78,15 @@ class MyClient(discord.Client):
           return
         categoryID = categoryID[0]
         newChannel = None
+        found = False
         for cat in message.guild.categories:
           if cat.id == categoryID:
             newChannel = await cat.create_text_channel(author.name + "_arena")
+            false = True
             break
+        if not found:
+          await message.channel.send("Someone thought it was funny to delete my category...")
+          return
         timeoutstart = dt.datetime.now()
         while newChannel == None:
           if (dt.datetime.now() - timeoutstart) < dt.datetime(second=30):
