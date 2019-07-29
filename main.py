@@ -149,6 +149,7 @@ class MyClient(discord.Client):
         conn = sqlite3.connect(databaseName)
         cur = conn.cursor()
         cur.execute("INSERT INTO servers (serverID, categoryID) VALUES (?, ?)", (message.guild.id, messArgv[1]))
+        cur.execute("UPDATE servers SET categoryID = ? WHERE serverID = ?", (messArgv[1], message.guild.id))
         cur.close()
         conn.commit()
         conn.close()
