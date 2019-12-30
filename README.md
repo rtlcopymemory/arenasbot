@@ -7,9 +7,9 @@ token = 'YOUR_TOKEN_HERE'
 ```
 
 ## Python version
-Uses **python 3.7** and the rewrite version of `discord.py`
+Uses **python 3.7 >=** and the rewrite version of `discord.py`
 
 ## Things I used
-- SQLite3 (local database on a file, easier to manage for this kind of project, no sequirity needed)
-- Python 3.7
+- SQLite3 (local database on a file, easier to manage for this kind of project, no secuirity needed)
+- Python 3.7 >=
 - Asyncronous programming
