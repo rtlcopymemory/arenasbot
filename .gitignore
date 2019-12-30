@@ -1,6 +1,5 @@
 secret.py
-testDatabase.py
-test.db
 *.db
 __pycache__
 .vscode
+/venv/
