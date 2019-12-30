@@ -8,5 +8,5 @@ setup(
     license='MIT',
     author='StackWolfed',
     author_email='stackwolfed@gmail.com',
-    description='Discord Bot to manage temporary arena channels'
+    description='Discord Bot to manage temporary arena channels', install_requires=['discord']
 )
