@@ -7,172 +7,179 @@ import asyncio
 import re
 import modules
 
-databaseName = 'database.db'
+database_name: str = 'database.db'
+time_format_string: str = '%Y%m%d%H%M%S'
+prefix: str = 'w.'
+timeout_hours: int = 3
 
-modules.initDB(sqlite3, databaseName)
+modules.init_db(sqlite3, database_name)
 
-prefix = 'w.'
 
 class MyClient(discord.Client):
-  # Method called every 20 seconds to check if any arena has to be deleted. It gets first called on Discord's on_ready function
-  async def checkDatabaseForDelete(self):
-    while True:
-      conn2 = sqlite3.connect(databaseName)
-      timeUp = dt.datetime.now() - dt.timedelta(hours=3, minutes=0) # timeout arenas
-      curr = conn2.cursor()
-      curr.execute("SELECT channelID, categoryID FROM arenas WHERE time < ?", (timeUp.strftime('%Y%m%d%H%M%S'), ))
-      results = curr.fetchall() # returns an array of tuples with the arenas to delete
-      print(results)
-      if results != []: # Do it only if its needed
-        # Delete database entry and channel
-        for toDelete in results:
-          # toDelete = (channelID, CategoryID)
-          curr.execute("SELECT serverID FROM servers WHERE categoryID = ?", (toDelete[1], ))
-          serverID = curr.fetchone()[0]
-          for server in self.guilds:
-            if server.id == serverID:
-              for cat in server.categories:
-                if cat.id == toDelete[1]:
-                  for channel in cat.channels:
-                    if channel.id == toDelete[0]:
-                      await channel.delete()
-                      curr.execute("DELETE FROM arenas WHERE channelID = ?", (toDelete[0], ))
-      curr.close()
-      conn2.commit()
-      conn2.close()
-      await asyncio.sleep(10)
+    def __init__(self, **options):
+        super().__init__(**options)
+        self.conn = sqlite3.connect(database_name)
 
-  ####################################### on_ready #################################################
-  async def on_ready(self):
-    print('Logged on as {0}!'.format(self.user))
-    await self.checkDatabaseForDelete()
+    # Method looping every 10 seconds to check if any arena has to be deleted. It gets first called on Discord's
+    # on_ready function
+    async def check_database_for_delete(self):
+        while True:
+            time_out = dt.datetime.now() - dt.timedelta(hours=timeout_hours, minutes=0)  # timeout arenas
+            curr = self.conn.cursor()
+            curr.execute("SELECT channelID FROM arenas WHERE time < ?", (time_out.strftime(time_format_string),))
+            channel_ids = curr.fetchall()  # [ChannelID, ...]
+            if len(channel_ids) > 0:
+                # Delete database entry and channel
+                for toDelete in channel_ids:
+                    channel_to_delete: discord.TextChannel = self.get_channel(int(toDelete))
+                    await channel_to_delete.delete()
+                    curr.execute("DELETE FROM arenas WHERE channelID = ?", (int(toDelete),))
+            curr.close()
+            self.conn.commit()
+            await asyncio.sleep(10)
 
-  ###################################### on_message ################################################
-  async def on_message(self, message):
-    if message.author.bot: # Ignore the message if its a bot who sent it
-      return
-    # OnMessage
-    messArgv = message.content.split(' ')
-    author = message.author
-    authorID = message.author.id
-    if message.content.lower().startswith(prefix + 'startarena'):
-      # Create arena
-      if len(messArgv) != 3:
-        await message.channel.send("Please provide an arena ID and a Password (Not enough arguments)")
-        return
-      if not re.fullmatch(r"^[0-9a-zA-Z]{5}$", messArgv[1]) or not re.fullmatch(r"^\d{1,8}$", messArgv[2]):
-        await message.channel.send("Please provide an arena ID and a Password")
-        return
-      conn = sqlite3.connect(databaseName)
-      cur = conn.cursor()
-      cur.execute("SELECT * FROM arenas WHERE authorID = ?", (authorID,))
-      check = cur.fetchone()
-      if check != None:
-        await message.channel.send("You already have an arena open")
-      else:
+    async def on_ready(self):
+        print('Logged on as {0}!'.format(self.user))
+        await self.change_presence(status=discord.Status.online,
+                                   activity=discord.Game("{}help for help".format(prefix)))
+        await self.check_database_for_delete()
+
+    async def start_arena(self, message):
+        message_argv = message.content.split(' ')
+        author: discord.User = message.author
+
+        if len(message_argv) < 3:
+            await message.channel.send("Please provide an arena ID and a Password (Not enough arguments)")
+            return
+
+        if not re.fullmatch(r"^[0-9a-zA-Z]{5}$", message_argv[1]) or not re.fullmatch(r"^\d{1,8}$", message_argv[2]):
+            await message.channel.send("Please provide an arena ID and a Password")
+            return
+
+        cur = self.conn.cursor()
+
+        cur.execute("SELECT * FROM arenas WHERE authorID = ?", (author.id,))
+
+        if cur.fetchone() is not None:
+            await message.channel.send("You already have an arena open")
+            cur.close()
+            return
+
         # create it
         cur.execute("SELECT categoryID FROM servers WHERE serverID = ?", (message.guild.id,))
-        categoryID = cur.fetchone()
-        if categoryID == None:
-          await message.channel.send("Sorry fam, gotta ask an admin to set up the category first")
-          return
-        categoryID = categoryID[0]
-        newChannel = None
-        found = False
-        for cat in message.guild.categories:
-          if cat.id == categoryID:
-            newChannel = await cat.create_text_channel(author.name + "_arena")
-            false = True
-            break
-        if not found:
-          await message.channel.send("Someone thought it was funny to delete my category...")
-          return
-        timeoutstart = dt.datetime.now()
-        while newChannel == None:
-          if (dt.datetime.now() - timeoutstart) < dt.datetime(second=30):
-            await message.channel.send("Something went wrong, request took longer than a minute")
+        categoryID: int = cur.fetchone()[0]
+
+        if categoryID is None:
+            await message.channel.send(
+                'Sorry fam, gotta ask an admin to set up the category first\nUse {}setcategory CATEGORY_ID'.format(
+                    prefix))
+            cur.close()
             return
-          continue
-        channelID = newChannel.id
-        cur.execute("""
-          INSERT INTO arenas (channelID, categoryID, author, authorID, time)
-          VALUES (?, ?, ?, ?, ?)
-        """, (channelID, categoryID, author.name, authorID, dt.datetime.now().strftime('%Y%m%d%H%M%S')))
-        infoMessage = await newChannel.send("ID: {0}\nPass: {1}".format(messArgv[1], messArgv[2]))
-        timeoutstart = dt.datetime.now()
-        while infoMessage == None:
-          if (dt.datetime.now() - timeoutstart) < dt.datetime(second=30):
-            await message.channel.send("Something went wrong with the message pinning, request took longer than a minute")
+
+        category = self.get_channel(categoryID)
+        if category is None:
+            await message.channel.send("Someone thought it was funny to delete my category...")
+            cur.close()
             return
-          continue
+
+        newChannel = await category.create_text_channel(author.name + "_arena")
+
+        cur.execute("""INSERT INTO arenas (channelID, authorID, time) VALUES (?, ?, ?)""", (
+            newChannel.id, author.id, dt.datetime.now().strftime(time_format_string)))
+
+        infoMessage = await newChannel.send("ID: {0}\nPass: {1}".format(message_argv[1], message_argv[2]))
         await infoMessage.pin()
-        await message.channel.send("Ight bro, here's your arena channel. You have 3 hour before it expires\n<#{}>".format(channelID))
-      cur.close()
-      conn.commit()
-      conn.close()
-    elif message.content.lower().startswith(prefix + 'closearena'): # closearena command
-      # Delete arena
-      conn = sqlite3.connect(databaseName)
-      cur = conn.cursor()
-      cur.execute("SELECT channelID FROM arenas WHERE authorID = ?", (authorID, ))
-      res = cur.fetchone()
-      if res == None:
-        await message.channel.send("Fam, you first gotta open an arena to close it...")
-        return
-      cur.execute("DELETE FROM arenas WHERE authorID = ?", (authorID, ))
-      cur.fetchone()
-      cur.execute("SELECT categoryID FROM servers WHERE serverID = ?", (message.guild.id, ))
-      categoryID = (cur.fetchone())[0]
-      channelID = res[0]
-      for channel in message.guild.channels:
-        if channel.id == channelID:
-          await channel.delete()
-          break
-      if message.channel.id != channelID:
-        await message.channel.send("Ok, arena channel deleted")
-      cur.close()
-      conn.commit()
-      conn.close()
-    elif message.content.lower().startswith(prefix + 'setcategory'): # setcategory command
-      if not author.permissions_in(message.channel).administrator:
-        await message.channel.send("Only admins can set this... sorry")
-      if re.fullmatch(r"^\d{18}$", messArgv[1]):
-        # check if the category exists
-        found = False
-        for cat in message.guild.categories:
-          if cat.id == int(messArgv[1]):
-            found = True
-        if not found:
-          await message.channel.send("Category not found, are you sure it was a category ID?")
-          return
-        # Set arenas category
-        conn = sqlite3.connect(databaseName)
-        cur = conn.cursor()
-        cur.execute("INSERT INTO servers (serverID, categoryID) VALUES (?, ?)", (message.guild.id, messArgv[1]))
-        cur.execute("UPDATE servers SET categoryID = ? WHERE serverID = ?", (messArgv[1], message.guild.id))
+        await message.channel.send(
+            "Ight bro, here's your arena channel. You have {} hours before it expires\n<#{}>".format(timeout_hours,
+                                                                                                     newChannel.id))
+
+        self.conn.commit()
         cur.close()
-        conn.commit()
-        conn.close()
+
+    async def close_arena(self, message):
+        author: discord.User = message.author
+
+        cur = self.conn.cursor()
+        cur.execute("SELECT channelID FROM arenas WHERE authorID = ?", (author.id,))
+        res = cur.fetchone()
+        if res is None:
+            await message.channel.send("Fam, you first gotta open an arena to close it...")
+            return
+
+        cur.execute("DELETE FROM arenas WHERE authorID = ?", (author.id,))
+        channelID = res[0]
+        await self.get_channel(channelID).delete()
+
+        if message.channel.id != channelID:
+            await message.channel.send("Ok, arena channel deleted")
+
+        self.conn.commit()
+        cur.close()
+
+    async def set_category(self, message):
+        author: discord.User = message.author
+        message_argv: list = message.content.split(' ')
+
+        if not author.permissions_in(message.channel).administrator:
+            await message.channel.send("Only admins can set this... sorry")
+            return
+
+        if len(message_argv) < 2:
+            await message.channel.send("Wrong usage, missing CATEGORY_ID parameter")
+            return
+
+        if not re.fullmatch(r"^\d{18}$", message_argv[1]):
+            await message.channel.send("Invalid ID, please give the bot a category ID")
+            return
+
+        category: discord.CategoryChannel = self.get_channel(int(message_argv[1]))
+        if category is None:
+            await message.channel.send("Category not found, are you sure it was a category ID?")
+            return
+
+        cur = self.conn.cursor()
+
+        cur.execute("DELETE FROM servers WHERE serverID = ?", (message.guild.id,))
+        self.conn.commit()
+
+        cur.execute("INSERT INTO servers (serverID, categoryID) VALUES (?, ?)", (message.guild.id, message_argv[1]))
+        self.conn.commit()
+
         await message.channel.send("Ight, category set")
-      else:
-        await message.channel.send("Invalid ID, please give the bot a category ID")
-    elif message.content.lower().startswith(prefix + 'help'): # help command
-      # embed
-      embed = discord.Embed()
-      embed.color = discord.Color.from_rgb(149, 66, 244)
-      embed.set_author(name = "Bot by: Sesilaso", url = "https://github.com/StackWolfed/arenasbot")
-      embed.title = "Help"
-      embed.add_field(name=(prefix + "startarena <ARENA_ID> <ARENA_PSW>"), value="Creates an arena")
-      embed.add_field(name=(prefix + "closearena"), value="Closes an arena")
-      embed.add_field(name=(prefix + "setcategory <CATEGORY_ID>"), value="[ADMINS ONLY] Sets the target category to create arena channels")
-      embed.add_field(name=(prefix + "help"), value="This")
-      await message.channel.send(embed=embed)
-  ####################################### on_error #################################################
-  async def on_error(self, event, *args, **kwargs):
-    # OnError
-    print("lul Error: ", event)
-    print("lul stuff: ", args)
-    print("lul even more stuff: ", kwargs)
+        cur.close()
+
+    async def help(self, message):
+        embed: discord.Embed = discord.Embed(color=discord.Color.from_rgb(149, 66, 244))
+        embed.set_author(name="Bot by: Sesilaso", url="https://github.com/StackWolfed/arenasbot")
+        embed.title = "Help"
+        embed.add_field(name=(prefix + "startarena <ARENA_ID> <ARENA_PSW>"), value="Creates an arena")
+        embed.add_field(name=(prefix + "closearena"), value="Closes an arena")
+        embed.add_field(name=(prefix + "setcategory <CATEGORY_ID>"),
+                        value="[ADMINS ONLY] Sets the target category to create arena channels")
+        embed.add_field(name=(prefix + "help"), value="This help message")
+        await message.channel.send(embed=embed)
+
+    async def on_message(self, message):
+        # Ignore the message if its a bot who sent it
+        if message.author.bot:
+            return
+
+        if message.content.lower().startswith(prefix + 'startarena'):
+            await self.start_arena(message)
+
+        elif message.content.lower().startswith(prefix + 'close'):
+            await self.close_arena(message)
+
+        elif message.content.lower().startswith(prefix + 'setcategory'):
+            await self.set_category(message)
+
+        elif message.content.lower().startswith(prefix + 'help'):
+            await self.help(message)
+
+    async def on_error(self, event, *args, **kwargs):
+        if isinstance(args[0], discord.Message):
+            await args[0].channel.send("An error occurred in function {}: {}".format(event, args))
+
 
 client = MyClient()
 client.run(secret.token)
