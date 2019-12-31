@@ -153,7 +153,7 @@ class MyClient(discord.Client):
         embed.set_author(name="Bot by: Sesilaso", url="https://github.com/StackWolfed/arenasbot")
         embed.title = "Help"
         embed.add_field(name=(prefix + "startarena <ARENA_ID> <ARENA_PSW>"), value="Creates an arena")
-        embed.add_field(name=(prefix + "closearena"), value="Closes an arena")
+        embed.add_field(name=(prefix + "close"), value="Closes an arena")
         embed.add_field(name=(prefix + "setcategory <CATEGORY_ID>"),
                         value="[ADMINS ONLY] Sets the target category to create arena channels")
         embed.add_field(name=(prefix + "help"), value="This help message")
